@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-export interface Job { name: string; run: string; locks: string[]; artifacts: string[]; timeoutMinutes?: number }
+export interface Job { name: string; run: string; locks: string[]; artifacts: string[]; timeoutMinutes?: number; manual: boolean }
 export interface Config {
   repo: string;
   pollSeconds: number;
@@ -12,7 +12,7 @@ export interface Config {
 }
 
 const TOP_KEYS = ['repo', 'pollSeconds', 'concurrency', 'branches', 'pullRequests', 'keepRuns', 'jobs'];
-const JOB_KEYS = ['name', 'run', 'locks', 'artifacts', 'timeoutMinutes'];
+const JOB_KEYS = ['name', 'run', 'locks', 'artifacts', 'timeoutMinutes', 'manual'];
 
 function bad(field: string, msg: string): never {
   throw new Error(`Invalid config: "${field}" ${msg}`);
@@ -56,12 +56,14 @@ export function validateConfig(raw: unknown): Config {
     if (names.has(j.name)) bad(`${f}.name`, `duplicates "${j.name}"`);
     names.add(j.name);
     if (typeof j.run !== 'string' || !j.run.trim()) bad(`${f}.run`, 'must be a non-empty command');
+    if (j.manual !== undefined && typeof j.manual !== 'boolean') bad(`${f}.manual`, 'must be true or false');
     return {
       name: j.name,
       run: j.run,
       locks: strings(j.locks, `${f}.locks`),
       artifacts: strings(j.artifacts, `${f}.artifacts`),
       timeoutMinutes: j.timeoutMinutes === undefined ? undefined : posInt(j.timeoutMinutes, `${f}.timeoutMinutes`),
+      manual: j.manual ?? false,
     };
   });
 

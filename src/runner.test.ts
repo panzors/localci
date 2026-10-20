@@ -31,7 +31,7 @@ test('runs jobs in order, stops at first failure, keeps logs, env and artifacts'
   const cfg = validateConfig({
     repo: 'o/r',
     jobs: [
-      { name: 'ok', run: node('console.log(process.env.LCI_REF, process.env.LCI_SHA, !!process.env.LCI_GITHUB_TOKEN)') },
+      { name: 'ok', run: node("console.log(process.env.LCI_REF, process.env.LCI_SHA, !!process.env.LCI_GITHUB_TOKEN);require('fs').mkdirSync('rep');require('fs').writeFileSync('rep/index.html','x')"), artifacts: ['rep'] },
       { name: 'bad', run: node("require('fs').writeFileSync('out.txt','x');console.error('boom error');process.exit(3)"), artifacts: ['out.txt', 'missing'] },
       { name: 'never', run: node('') },
     ],
@@ -46,6 +46,8 @@ test('runs jobs in order, stops at first failure, keeps logs, env and artifacts'
   const dir = join(paths.runs, `main-${sha.slice(0, 7)}`);
   assert.match(fs.readFileSync(join(dir, 'ok.log'), 'utf8'), new RegExp(`main ${sha} false`));
   assert.ok(fs.existsSync(join(dir, 'artifacts', 'bad', 'out.txt')));
+  assert.ok(fs.existsSync(join(dir, 'artifacts', 'ok', 'rep', 'index.html')), 'passed jobs keep artifacts too');
+  assert.ok(fs.statSync(join(dir, 'artifacts', 'ok.zip')).size > 0);
   assert.equal(JSON.parse(fs.readFileSync(join(dir, 'status.json'), 'utf8')).result, 'failed');
   assert.ok(fs.existsSync(join(paths.slot(0), 'a.txt')));
 });
@@ -76,6 +78,14 @@ test('cancel kills the job and releases its locks', async () => {
   assert.equal(st.result, 'cancelled');
   assert.deepEqual(st.jobs.map(j => j.result), ['cancelled', 'skipped']);
   assert.equal(locks.held.size, 0);
+});
+
+test('automatic runs skip manual jobs; a manual run executes only its job', async () => {
+  const cfg = validateConfig({ repo: 'o/r', jobs: [{ name: 'ci', run: node('') }, { name: 'e2e', run: node(''), manual: true }] });
+  assert.deepEqual((await executeRun(cfg, run, 0, ctx())).jobs.map(j => j.name), ['ci']);
+  const st = await executeRun(cfg, { ...run, manual: 'e2e' }, 0, ctx());
+  assert.deepEqual(st.jobs.map(j => [j.name, j.result]), [['e2e', 'passed']]);
+  assert.ok(fs.existsSync(join(paths.runs, `main-${sha.slice(0, 7)}-e2e`, 'e2e.log')));
 });
 
 test.after(() => fs.rmSync(root, { recursive: true, force: true }));

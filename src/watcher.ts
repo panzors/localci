@@ -25,9 +25,9 @@ export function applyPoll(s: State, current: QueuedRun[]): string[] {
   for (const r of current) {
     if (s.seen[r.ref] === r.sha) continue;
     s.seen[r.ref] = r.sha;
-    s.queue = s.queue.filter(q => q.ref !== r.ref);
+    s.queue = s.queue.filter(q => q.ref !== r.ref || q.manual);
     s.queue.push(r);
-    if (s.active.some(a => a.ref === r.ref)) stale.push(r.ref);
+    if (s.active.some(a => a.ref === r.ref && !a.manual)) stale.push(r.ref);
   }
   return stale;
 }

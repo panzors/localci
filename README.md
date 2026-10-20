@@ -26,10 +26,11 @@ Create `lci.json` in the directory you run `lci` from (see the example in REQUIR
 | `lci pause` / `lci resume` | Stop / restart starting new runs. Polling continues. |
 | `lci status` | Daemon state, queue, active runs, held locks, last poll. |
 | `lci run <branch\|pr#>` | Queue the ref's current head (`lci run 42` for PR #42). |
+| `lci run <job> <branch\|pr#>` | Run just that job on the ref's head, ahead of everything queued (`lci run e2e #42`). Jobs with `"manual": true` only run this way. |
 | `lci runs [--failed] [--ref <ref>]` | Run history with folder paths. |
 | `lci clean [--runs]` | Remove worktree slots and caches (and run history). Stop `lci start` first. |
 
-Everything lives in `~/.lci` (override with `LCI_HOME`): `repo.git`, `work/slot-N`, `npm-cache`, `runs/<ref>-<sha7>/` (`status.json`, `<job>.log`, `artifacts/`) and `state.json`.
+Run results go to `.lci/<ref>-<sha7>/` (`status.json`, `<job>.log`, `artifacts/`) next to `lci.json`; add `.lci/` to that repo's `.gitignore`. Everything else lives in `~/.lci` (override with `LCI_HOME`): `repo.git`, `work/slot-N`, `npm-cache` and `state.json`.
 
 Jobs run whatever code is on the branch or PR, on your machine. Only enable `pullRequests` for repos where you trust everyone who can open a PR.
 

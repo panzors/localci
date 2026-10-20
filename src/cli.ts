@@ -1,10 +1,11 @@
 import fs from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { loadConfig } from './config.ts';
 import { start } from './daemon.ts';
 import { ensureRepo, git, lsRemote } from './git.ts';
 import { readRuns } from './runs.ts';
-import { isAlive, mutateState, paths, readState, redact } from './state.ts';
+import { isAlive, mutateState, paths, readState, redact, sameRun, type QueuedRun } from './state.ts';
 
 const USAGE = `Usage: lci <command> [--config <path>]
 
@@ -12,6 +13,7 @@ const USAGE = `Usage: lci <command> [--config <path>]
   pause | resume                 stop / restart starting new runs
   status                         show queue, active runs and locks
   run <branch|pr#>               queue a run for the ref's current head
+  run <job> <branch|pr#>         run one job (e.g. a manual one) next, ahead of the queue
   runs [--failed] [--ref <ref>]  list run history, newest first
   clean [--runs]                 remove worktree slots and caches (and run history)`;
 
@@ -25,7 +27,9 @@ async function main() {
       runs: { type: 'boolean' },
     },
   });
-  const [cmd, arg] = positionals;
+  const [cmd, arg, arg2] = positionals;
+  // Run results live next to the config, in ./.lci; the rest stays in ~/.lci.
+  paths.runs = join(dirname(resolve(values.config ?? 'lci.json')), '.lci');
 
   switch (cmd) {
     case 'start':
@@ -41,7 +45,7 @@ async function main() {
       const daemon = isAlive(s.daemonPid) ? `running (pid ${s.daemonPid})` : 'not running';
       console.log(`daemon:    ${daemon}${s.paused ? ', PAUSED' : ''}`);
       console.log(`last poll: ${s.lastPoll ?? 'never'}`);
-      console.log(`queue:     ${s.queue.map(q => `${q.ref}@${q.sha.slice(0, 7)}`).join(', ') || '(empty)'}`);
+      console.log(`queue:     ${s.queue.map(q => `${q.ref}@${q.sha.slice(0, 7)}${q.manual ? ` [${q.manual}]` : ''}`).join(', ') || '(empty)'}`);
       console.log('active:');
       for (const a of s.active) console.log(`  slot-${a.slot}  ${a.ref}@${a.sha.slice(0, 7)}  ${a.job ?? '(checking out)'}`);
       if (!s.active.length) console.log('  (none)');
@@ -52,17 +56,23 @@ async function main() {
     }
 
     case 'run': {
-      if (!arg) throw new Error('Usage: lci run <branch|pr#>');
+      if (!arg) throw new Error('Usage: lci run [<job>] <branch|pr#>');
       const cfg = loadConfig(values.config);
+      const [manual, target] = arg2 ? [arg, arg2] : [undefined, arg];
+      if (manual && !cfg.jobs.some(j => j.name === manual)) throw new Error(`No job named "${manual}" in the config`);
       await ensureRepo(cfg.repo);
       const remote = await lsRemote();
-      const prNum = /^(?:#|pr-)?(\d+)$/.exec(arg)?.[1];
-      const run = prNum
-        ? { ref: `pr-${prNum}`, sha: remote.get(`refs/pull/${prNum}/head`) ?? '', pr: Number(prNum) }
-        : { ref: arg, sha: remote.get(`refs/heads/${arg}`) ?? '' };
-      if (!run.sha) throw new Error(`No ${prNum ? `pull request #${prNum}` : `branch "${arg}"`} on the remote`);
-      mutateState(s => { s.queue = [...s.queue.filter(q => q.ref !== run.ref), run]; });
-      console.log(`Queued ${run.ref}@${run.sha.slice(0, 7)}.`);
+      const prNum = /^(?:#|pr-)?(\d+)$/.exec(target)?.[1];
+      const run: QueuedRun = prNum
+        ? { ref: `pr-${prNum}`, sha: remote.get(`refs/pull/${prNum}/head`) ?? '', pr: Number(prNum), manual }
+        : { ref: target, sha: remote.get(`refs/heads/${target}`) ?? '', manual };
+      if (!run.sha) throw new Error(`No ${prNum ? `pull request #${prNum}` : `branch "${target}"`} on the remote`);
+      // Job runs jump the queue; plain ref runs go to the back.
+      mutateState(s => {
+        const rest = s.queue.filter(q => !sameRun(q, run));
+        s.queue = manual ? [run, ...rest] : [...rest, run];
+      });
+      console.log(`Queued ${run.ref}@${run.sha.slice(0, 7)}${manual ? ` [${manual}] at the front` : ''}.`);
       if (!isAlive(readState().daemonPid)) console.log('lci is not running; start it with `lci start`.');
       return;
     }

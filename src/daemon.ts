@@ -4,7 +4,7 @@ import { openPullRequests, postStatus } from './github.ts';
 import { Locks } from './locks.ts';
 import { executeRun } from './runner.ts';
 import { markCrashed, pruneRuns } from './runs.ts';
-import { isAlive, log, mutateState, readState, runDir, type GhState, type QueuedRun } from './state.ts';
+import { isAlive, log, mutateState, readState, runDir, sameRun, type GhState, type QueuedRun } from './state.ts';
 import { applyPoll, trackedRefs } from './watcher.ts';
 
 /** `lci start`: watcher + scheduler in the foreground until Ctrl-C (FR-6.1). */
@@ -16,7 +16,7 @@ export async function start(cfg: Config) {
     const active = s.active;
     for (const a of active) {
       markCrashed(a.dir);
-      if (!s.queue.some(q => q.ref === a.ref)) s.queue.unshift({ ref: a.ref, sha: a.sha, pr: a.pr });
+      if (!s.queue.some(q => sameRun(q, a))) s.queue.unshift({ ref: a.ref, sha: a.sha, pr: a.pr, manual: a.manual });
     }
     s.active = [];
     s.locks = {};
@@ -81,7 +81,7 @@ export async function start(cfg: Config) {
 
   function launch(run: QueuedRun, slot: number) {
     const ctrl = new AbortController();
-    const name = `${run.ref}@${run.sha.slice(0, 7)}`;
+    const name = `${run.ref}@${run.sha.slice(0, 7)}${run.manual ? ` [${run.manual}]` : ''}`;
     log(`start ${name} in slot-${slot}`);
     const onJob = (job: string) => mutateState(s => {
       const a = s.active.find(x => x.slot === slot);
@@ -95,7 +95,7 @@ export async function start(cfg: Config) {
         mutateState(s => {
           s.active = s.active.filter(a => a.slot !== slot);
           // Ctrl-C: run it again on the next start.
-          if (stopping && !s.queue.some(q => q.ref === run.ref)) s.queue.unshift(run);
+          if (stopping && !s.queue.some(q => sameRun(q, run))) s.queue.unshift(run);
         });
         pruneRuns(cfg.keepRuns);
         schedule();
@@ -123,7 +123,7 @@ export async function start(cfg: Config) {
         return applyPoll(s, trackedRefs(remote, cfg.branches, cfg.pullRequests ? s.openPrs : []));
       });
       for (const r of running.values()) {
-        if (stale.includes(r.run.ref)) {
+        if (stale.includes(r.run.ref) && !r.run.manual) {
           log(`cancel ${r.run.ref}@${r.run.sha.slice(0, 7)}: newer commit pushed`);
           r.ctrl.abort();
         }

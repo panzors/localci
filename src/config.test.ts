@@ -8,7 +8,7 @@ test('applies defaults', () => {
   const c = validateConfig(base);
   assert.deepEqual(
     { poll: c.pollSeconds, conc: c.concurrency, prs: c.pullRequests, keep: c.keepRuns, job: c.jobs[0] },
-    { poll: 60, conc: 1, prs: false, keep: 10, job: { name: 'ci', run: 'npm test', locks: [], artifacts: [], timeoutMinutes: undefined } },
+    { poll: 60, conc: 1, prs: false, keep: 10, job: { name: 'ci', run: 'npm test', locks: [], artifacts: [], timeoutMinutes: undefined, manual: false } },
   );
 });
 

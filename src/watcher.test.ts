@@ -39,6 +39,15 @@ test('returns refs whose running run is stale', () => {
   assert.deepEqual(applyPoll(s, [{ ref: 'main', sha: 'bbb' }]), ['main']);
 });
 
+test('a new commit leaves queued and running manual job runs alone', () => {
+  const s = fresh();
+  s.seen = { main: 'aaa' };
+  s.queue = [{ ref: 'main', sha: 'aaa', manual: 'e2e' }];
+  s.active = [{ ref: 'main', sha: 'aaa', manual: 'e2e', slot: 0, dir: 'x' }];
+  assert.deepEqual(applyPoll(s, [{ ref: 'main', sha: 'bbb' }]), []);
+  assert.deepEqual(s.queue, [{ ref: 'main', sha: 'aaa', manual: 'e2e' }, { ref: 'main', sha: 'bbb' }]);
+});
+
 test('drops closed PRs but keeps manual runs of untracked refs', () => {
   const s = fresh();
   applyPoll(s, [{ ref: 'pr-7', sha: 'ccc', pr: 7 }]);

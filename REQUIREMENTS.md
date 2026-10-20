@@ -46,7 +46,7 @@ Update the checkbox and the **Status** column as work lands. Reference requireme
 |----|-------------|--------|
 | FR-1.1 | [x] Read `lci.json` from the working directory (or `--config <path>`). | Done |
 | FR-1.2 | [x] Config fields: `repo` (`owner/name`), `pollSeconds`, `concurrency`, `branches[]`, `pullRequests` (bool), `jobs[]`. | Done |
-| FR-1.3 | [x] Each job has `name`, `run` (shell command), optional `locks[]`, optional `artifacts[]` (paths relative to the checkout), optional `timeoutMinutes`. | Done |
+| FR-1.3 | [x] Each job has `name`, `run` (shell command), optional `locks[]`, optional `artifacts[]` (paths relative to the checkout), optional `timeoutMinutes`, optional `manual` (default false: left out of automatic runs, run only by `lci run <job> <ref>`). | Done |
 | FR-1.4 | [x] Invalid config fails at startup with a message naming the bad field. | Done |
 
 Example:
@@ -97,15 +97,15 @@ Example:
 | FR-4.3 | [x] A job with `locks` waits until every named lock is free, holds them only for that job, then releases them, even on failure or cancellation. Other runs' unlocked jobs keep running. | Done |
 | FR-4.4 | [x] Jobs exceeding `timeoutMinutes` are killed and marked failed. | Done |
 | FR-4.5 | [x] Cancelling or killing a job kills its whole process tree (Windows: `taskkill /T /F`) so browsers and containers do not keep running and hold locks. | Done |
-| FR-4.6 | [x] Each job's stdout and stderr are streamed to `runs/<ref>-<sha7>/<job>.log`. | Done |
+| FR-4.6 | [x] Each job's stdout and stderr are streamed to `.lci/<ref>-<sha7>/<job>.log`. | Done |
 | FR-4.7 | [x] Env vars passed to jobs: `LCI_REF`, `LCI_SHA`, `LCI_PR` (if a PR), `LCI_RUN_DIR`. | Done |
 
 ### FR-5 Results, artifacts and flagging
 
 | ID | Requirement | Status |
 |----|-------------|--------|
-| FR-5.1 | [x] Each run writes `runs/<ref>-<sha7>/status.json`: ref, sha, PR number, start/end times, per-job result (`passed` / `failed` / `cancelled` / `skipped`), exit code. | Done |
-| FR-5.2 | [x] On failure, copy the job's `artifacts` paths into `runs/<ref>-<sha7>/artifacts/<job>/`. | Done |
+| FR-5.1 | [x] Each run writes `.lci/<ref>-<sha7>/status.json`: ref, sha, PR number, start/end times, per-job result (`passed` / `failed` / `cancelled` / `skipped`), exit code. | Done |
+| FR-5.2 | [x] When a job passes or fails, copy its `artifacts` paths into `.lci/<ref>-<sha7>/artifacts/<job>/` and zip them to `artifacts/<job>.zip`. | Done |
 | FR-5.3 | [~] Post a GitHub commit status per job (`context: lci/<job>`): `pending` at start, then `success` / `failure` / `error`. The description holds the first error line (≤140 chars). | Not tried against live GitHub yet |
 | FR-5.4 | [~] If GitHub is unreachable, the run still completes and is recorded locally. Status posting is retried on the next poll. | Outbox in state.json; not tried against live GitHub yet |
 | FR-5.5 | [x] Keep the last N runs per ref (default 10) and delete older run folders. | Done |
@@ -119,6 +119,7 @@ Example:
 | FR-6.3 | `lci resume` | [x] Clears the paused flag; queued runs start. | Done |
 | FR-6.4 | `lci status` | [x] Shows: paused/running, queue, active runs with slot and job, held locks, last poll time. | Done |
 | FR-6.5 | `lci run <branch\|pr#>` | [x] Queues a run for the ref's current head, even if its SHA has not changed. | Done |
+| FR-6.5a | `lci run <job> <branch\|pr#>` | [x] Queues a run of only that job at the front of the queue. New commits on the ref do not cancel or replace it. | Done |
 | FR-6.6 | `lci runs [--failed] [--ref <ref>]` | [x] Lists run history, newest first, with the run folder path. | Done |
 | FR-6.7 | `lci clean [--runs]` | [x] See FR-3.5. | Done |
 

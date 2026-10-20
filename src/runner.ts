@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { join } from 'node:path';
 import type { Config, Job } from './config.ts';
@@ -19,14 +19,15 @@ type Outcome = Pick<JobStatus, 'result' | 'exitCode' | 'description'>;
 const GH: Partial<Record<JobResult, GhState>> = { passed: 'success', failed: 'failure', cancelled: 'error', error: 'error' };
 const now = () => new Date().toISOString();
 
-/** Runs cfg.jobs in order in a slot, stopping at the first failure (FR-4.1). Never throws for job failures. */
+/** Runs the run's jobs in order in a slot, stopping at the first failure (FR-4.1). Never throws for job failures. */
 export async function executeRun(cfg: Config, run: QueuedRun, slot: number, ctx: RunContext): Promise<RunStatus> {
+  const jobs = cfg.jobs.filter(j => (run.manual ? j.name === run.manual : !j.manual));
   const dir = runDir(run);
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
   const status: RunStatus = {
     ref: run.ref, sha: run.sha, pr: run.pr, startedAt: now(), result: 'running',
-    jobs: cfg.jobs.map(j => ({ name: j.name, result: 'skipped', exitCode: null })),
+    jobs: jobs.map(j => ({ name: j.name, result: 'skipped', exitCode: null })),
   };
   const save = () => writeRunStatus(dir, status);
   save();
@@ -40,7 +41,7 @@ export async function executeRun(cfg: Config, run: QueuedRun, slot: number, ctx:
     return status;
   }
 
-  for (const [i, job] of cfg.jobs.entries()) {
+  for (const [i, job] of jobs.entries()) {
     if (ctx.signal.aborted) status.result = 'cancelled';
     if (status.result !== 'running') break;
     const js = status.jobs[i];
@@ -51,7 +52,7 @@ export async function executeRun(cfg: Config, run: QueuedRun, slot: number, ctx:
 
     Object.assign(js, await runJob(job, run, cwd, dir, ctx), { endedAt: now() });
     if (js.result !== 'passed') status.result = js.result;
-    if (js.result === 'failed') copyArtifacts(job, cwd, dir);
+    if (js.result === 'passed' || js.result === 'failed') copyArtifacts(job, cwd, dir);
     ctx.report?.(run.sha, `lci/${job.name}`, GH[js.result]!, js.description ?? js.result);
     save();
   }
@@ -155,9 +156,16 @@ export function killTree(pid: number) {
   }
 }
 
+/** Copies the job's artifacts to artifacts/<job>/ and zips them to artifacts/<job>.zip (FR-5.2). */
 function copyArtifacts(job: Job, cwd: string, dir: string) {
+  const out = join(dir, 'artifacts', job.name);
   for (const p of job.artifacts) {
     const src = join(cwd, p);
-    if (fs.existsSync(src)) fs.cpSync(src, join(dir, 'artifacts', job.name, p), { recursive: true });
+    if (fs.existsSync(src)) fs.cpSync(src, join(out, p), { recursive: true });
   }
+  if (!fs.existsSync(out)) return;
+  // shortcut: relies on bsdtar (Windows 10+, macOS) for -a zip; GNU tar on Linux writes a plain tar. Add a zip lib if Linux matters.
+  const tar = process.platform === 'win32' ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe') : 'tar';
+  const r = spawnSync(tar, ['-a', '-cf', `${out}.zip`, '-C', out, '.'], { windowsHide: true });
+  if (r.status !== 0) fs.appendFileSync(join(dir, `${job.name}.log`), `\n[lci] zipping artifacts failed: ${r.error?.message ?? r.stderr}\n`);
 }

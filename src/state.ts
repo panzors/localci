@@ -14,7 +14,9 @@ export const paths = {
 };
 
 export type GhState = 'pending' | 'success' | 'failure' | 'error';
-export interface QueuedRun { ref: string; sha: string; pr?: number }
+/** `manual` names the one job a `lci run <job> <ref>` run executes; automatic runs leave it unset. */
+export interface QueuedRun { ref: string; sha: string; pr?: number; manual?: string }
+export const sameRun = (a: QueuedRun, b: QueuedRun) => a.ref === b.ref && a.manual === b.manual;
 export interface ActiveRun extends QueuedRun { slot: number; dir: string; job?: string }
 export interface StatusPost { sha: string; context: string; state: GhState; description: string }
 
@@ -79,7 +81,7 @@ export function isAlive(pid?: number) {
   }
 }
 
-export const runDir = (r: QueuedRun) => join(paths.runs, `${r.ref.replace(/[^\w.-]/g, '_')}-${r.sha.slice(0, 7)}`);
+export const runDir = (r: QueuedRun) => join(paths.runs, `${r.ref.replace(/[^\w.-]/g, '_')}-${r.sha.slice(0, 7)}${r.manual ? `-${r.manual}` : ''}`);
 
 export function log(msg: string) {
   console.log(`${new Date().toISOString()} ${redact(msg)}`);
