@@ -32,6 +32,8 @@ Create `lci.json` in the directory you run `lci` from (see the example in REQUIR
 
 Run results go to `.lci/<ref>-<sha7>/` (`status.json`, `<job>.log`, `artifacts/`) next to `lci.json`; add `.lci/` to that repo's `.gitignore`. Everything else lives in `~/.lci` (override with `LCI_HOME`): `repo.git`, `work/slot-N`, `npm-cache` and `state.json`.
 
+On Windows, jobs run through `cmd.exe`, so write `"run": "bash run-ci.sh"`, not `"run": "run-ci.sh"`. A bare `.sh` opens Git Bash in its own window: its output never reaches the log, and the job passes even when the script fails.
+
 Jobs run whatever code is on the branch or PR, on your machine. Only enable `pullRequests` for repos where you trust everyone who can open a PR.
 
 ## Development
