@@ -32,7 +32,7 @@ test('runs jobs in order, stops at first failure, keeps logs, env and artifacts'
     repo: 'o/r',
     jobs: [
       { name: 'ok', run: node("console.log(process.env.LCI_REF, process.env.LCI_SHA, !!process.env.LCI_GITHUB_TOKEN);require('fs').mkdirSync('rep');require('fs').writeFileSync('rep/index.html','x')"), artifacts: ['rep'] },
-      { name: 'bad', run: node("require('fs').writeFileSync('out.txt','x');console.error('boom error');process.exit(3)"), artifacts: ['out.txt', 'missing'] },
+      { name: 'bad', run: node("require('fs').writeFileSync('out.txt','x');console.error('first error');console.error('npm warn this will error');console.error('boom error');console.error('npm warn later error');process.exit(3)"), artifacts: ['out.txt', 'missing'] },
       { name: 'never', run: node('') },
     ],
   });

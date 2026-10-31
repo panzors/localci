@@ -103,7 +103,7 @@ function spawnJob(job: Job, run: QueuedRun, cwd: string, dir: string, signal: Ab
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
-    let firstError: string | undefined;
+    let lastError: string | undefined;
     let lastLine: string | undefined;
     // shortcut: scans per chunk, so a line split across chunks may be missed; fine for a 140-char summary.
     const onData = (chunk: Buffer) => {
@@ -112,7 +112,8 @@ function spawnJob(job: Job, run: QueuedRun, cwd: string, dir: string, signal: Ab
         const l = line.trim();
         if (!l) continue;
         lastLine = l;
-        if (!firstError && /\berror\b|\bfail/i.test(l)) firstError = l;
+        // Last, not first: test runners end with their summary ("2 failed"); warnings that mention "error" are noise.
+        if (/\berror\b|\bfail/i.test(l) && !/\bwarn/i.test(l)) lastError = l;
       }
     };
     child.stdout.on('data', onData);
@@ -138,7 +139,7 @@ function spawnJob(job: Job, run: QueuedRun, cwd: string, dir: string, signal: Ab
       if (killedBy === 'cancel') finish({ result: 'cancelled', exitCode: code, description: 'cancelled' });
       else if (killedBy === 'timeout') finish({ result: 'failed', exitCode: code, description: `timed out after ${job.timeoutMinutes} min` });
       else if (code === 0) finish({ result: 'passed', exitCode: 0, description: 'passed' });
-      else finish({ result: 'failed', exitCode: code, description: (firstError ?? lastLine ?? `exit code ${code}`).slice(0, 140) });
+      else finish({ result: 'failed', exitCode: code, description: (lastError ?? lastLine ?? `exit code ${code}`).slice(0, 140) });
     });
   });
 }

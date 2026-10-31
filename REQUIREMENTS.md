@@ -106,7 +106,7 @@ Example:
 |----|-------------|--------|
 | FR-5.1 | [x] Each run writes `.lci/<ref>-<sha7>/status.json`: ref, sha, PR number, start/end times, per-job result (`passed` / `failed` / `cancelled` / `skipped`), exit code. | Done |
 | FR-5.2 | [x] When a job passes or fails, copy its `artifacts` paths into `.lci/<ref>-<sha7>/artifacts/<job>/` and zip them to `artifacts/<job>.zip`. | Done |
-| FR-5.3 | [~] Post a GitHub commit status per job (`context: lci/<job>`): `pending` at start, then `success` / `failure` / `error`. The description holds the first error line (≤140 chars). | Not tried against live GitHub yet |
+| FR-5.3 | [~] Post a GitHub commit status per job (`context: lci/<job>`): `pending` at start, then `success` / `failure` / `error`. The description holds the last error line, ignoring warnings (≤140 chars). | Not tried against live GitHub yet |
 | FR-5.4 | [~] If GitHub is unreachable, the run still completes and is recorded locally. Status posting is retried on the next poll. | Outbox in state.json; not tried against live GitHub yet |
 | FR-5.5 | [x] Keep the last N runs per ref (default 10) and delete older run folders. | Done |
 
